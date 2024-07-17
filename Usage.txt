@@ -1,0 +1,7 @@
+1/Install the project requirements indicated in the requirements.txt file
+2/Go to selenium_scripts folder
+3/Choose the option current file while running the project
+4/Go to dr-rentScrapping.py file
+5/Run the file 
+6/Wait the Chrome navigator to be opened then make a little scrolling that the toolbar and the elements of the filter appears
+7/When the rents table appears,after the auto click on the button search, make a scrolling to the end of the page and let the scrapping continue  
