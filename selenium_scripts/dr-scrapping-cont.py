@@ -84,8 +84,8 @@ try:
     desired_page = 197
     current_page = 1
     while current_page < desired_page:
-        next_page_link = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.page-link.next")))
-        if "disabled" in next_page_link.get_attribute("class"):
+        next_page_link = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button.page-link.next")))
+        if next_page_link.get_attribute("aria-disabled") == "true":
             print("Reached the last available page before page 209.")
             break
         safe_click(next_page_link)
@@ -111,10 +111,10 @@ try:
                 cells = [cell.text for cell in row.find_elements(By.TAG_NAME, "td")]
                 writer.writerow(cells)
 
-            next_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.page-link.next")))
+            next_button = get_element_safe(driver, (By.CSS_SELECTOR, "button.page-link.next"))
             safe_click(next_button)
 
-            if "disabled" in next_button.get_attribute("class"):
+            if next_button.get_attribute("aria-disabled") == "true":
                 break
 
 except Exception as e:

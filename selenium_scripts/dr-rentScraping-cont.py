@@ -1,14 +1,13 @@
-from selenium.webdriver.common.keys import Keys
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support.ui import Select
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException, \
     ElementClickInterceptedException
+from webdriver_manager.chrome import ChromeDriverManager
 import time
 import csv
 import traceback
@@ -20,7 +19,7 @@ def get_element_safe(driver, locator, retries=3, delay=1):
             return driver.find_element(*locator)
         except StaleElementReferenceException:
             time.sleep(delay)
-    return driver.find_element(*locator)
+    return None
 
 
 def refetch_elements(driver, xpath):
@@ -50,12 +49,8 @@ def wait_for_clickable(driver, locator, timeout=60):
 
 def wait_for_load(driver, timeout=60):
     """Wait for the loader to disappear and page to load completely."""
-    try:
-        wait = WebDriverWait(driver, timeout)
-        wait.until(lambda driver: driver.execute_script("return document.readyState") == "complete")
-        wait.until(EC.invisibility_of_element((By.CSS_SELECTOR, "div.cs-loader")))
-    except TimeoutException:
-        print("Le chargement a pris trop de temps, mais le script continue.")
+    WebDriverWait(driver, timeout).until(lambda driver: driver.execute_script("return document.readyState") == "complete")
+    WebDriverWait(driver, timeout).until(EC.invisibility_of_element((By.CSS_SELECTOR, "div.cs-loader")))
 
 
 try:
@@ -64,36 +59,33 @@ try:
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     driver.get("https://dubailand.gov.ae/en/open-data/real-estate-data#/")
 
-    rent_tab_locator = (By.ID, "rent-tab")
-    safe_click(driver, rent_tab_locator)
+    safe_click(driver, (By.ID, "rent-tab"))
 
-    WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "rent_pFromDate")))
     from_date = get_element_safe(driver, (By.ID, "rent_pFromDate"))
     from_date.clear()
     from_date.send_keys("01/05/2024")
     from_date.send_keys(Keys.RETURN)
 
-    time.sleep(1)
-
-    # Attendre que les champs soient chargés
-    WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.ID, "rent_pToDate")))
     to_date = get_element_safe(driver, (By.ID, "rent_pToDate"))
     to_date.clear()
     to_date.send_keys("31/05/2024")
     to_date.send_keys(Keys.RETURN)
-
-    time.sleep(1)
-
-    to_date.send_keys(Keys.RETURN)
-
-    to_date.send_keys(Keys.RETURN)  
 
     wait_for_load(driver)
 
     select_element = Select(get_element_safe(driver, (By.NAME, "rentGrid_length")))
     select_element.select_by_value('100')
 
-    with open('../rents_month2.csv', 'w', newline='') as file:
+    # Desired start page number
+    desired_page = 5
+    current_page = 1
+    while current_page < desired_page:
+        next_page_link = wait_for_clickable(driver, (By.CSS_SELECTOR, "button.page-link.next"))
+        safe_click(driver, next_page_link)
+        current_page += 1
+        wait_for_load(driver)
+
+    with open('../continue.csv', 'w', newline='') as file:
         writer = csv.writer(file)
         first_page = True
         while True:
@@ -111,7 +103,7 @@ try:
             next_button = get_element_safe(driver, (By.CSS_SELECTOR, "button.page-link.next"))
             if next_button.get_attribute("aria-disabled") == "true":
                 break
-            safe_click(driver, next_button)
+            safe_click(driver, next_page_link)
 
 except Exception as e:
     print("An error occurred:", str(e))

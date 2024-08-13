@@ -99,10 +99,11 @@ try:
                 cells = row.find_elements(By.TAG_NAME, "td")  # Optimized to avoid refetching if not necessary
                 writer.writerow([cell.text for cell in cells])
 
-            next_button = get_element_safe(driver, (By.CSS_SELECTOR, "a.page-link.next"))
-            if "disabled" in next_button.get_attribute("class"):
+            next_button = get_element_safe(driver, (By.CSS_SELECTOR, "button.page-link.next"))
+            if next_button.get_attribute("aria-disabled") == "true":
                 break
             safe_click(next_button, driver)
+
 
 except Exception as e:
     print("An error occurred:", str(e))
