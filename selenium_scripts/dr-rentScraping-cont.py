@@ -1,56 +1,58 @@
+from selenium.webdriver.common.keys import Keys
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException, \
     ElementClickInterceptedException
-from webdriver_manager.chrome import ChromeDriverManager
 import time
 import csv
 import traceback
 
 
-def get_element_safe(driver, locator, retries=3, delay=1):
-    for _ in range(retries):
+def get_element_safe(driver, locator, retries=3, delay=10):
+    element = None
+    while retries > 0:
         try:
-            return driver.find_element(*locator)
-        except StaleElementReferenceException:
-            time.sleep(delay)
-    return None
+            element = WebDriverWait(driver, delay).until(EC.presence_of_element_located(locator))
+            return element
+        except TimeoutException:
+            retries -= 1
+            print("Retrying to locate element: ", locator)
+    return element
 
 
 def refetch_elements(driver, xpath):
-    time.sleep(1)
-    return driver.find_elements(By.XPATH, xpath)
+    return WebDriverWait(driver, 10).until(EC.presence_of_all_elements_located((By.XPATH, xpath)))
 
 
 def safe_click(driver, locator):
-    element = wait_for_clickable(driver, locator)
     attempts = 0
     while attempts < 3:
         try:
+            element = WebDriverWait(driver, 10).until(EC.element_to_be_clickable(locator))
             element.click()
             return
         except ElementClickInterceptedException:
-            time.sleep(1)
-            ActionChains(driver).move_to_element(element).click().perform()
             attempts += 1
+            print("Element intercepted, retrying click.")
         except TimeoutException:
-            print("Click timeout reached.")
-    driver.execute_script("arguments[0].click();", element)
-
-
-def wait_for_clickable(driver, locator, timeout=60):
-    return WebDriverWait(driver, timeout).until(EC.element_to_be_clickable(locator))
+            print("Click timeout reached, attempting JavaScript click.")
+            driver.execute_script("arguments[0].click();",
+                                  WebDriverWait(driver, 10).until(EC.element_to_be_clickable(locator)))
 
 
 def wait_for_load(driver, timeout=60):
-    """Wait for the loader to disappear and page to load completely."""
-    WebDriverWait(driver, timeout).until(lambda driver: driver.execute_script("return document.readyState") == "complete")
-    WebDriverWait(driver, timeout).until(EC.invisibility_of_element((By.CSS_SELECTOR, "div.cs-loader")))
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda driver: driver.execute_script("return document.readyState") == "complete")
+        WebDriverWait(driver, timeout).until(EC.invisibility_of_element((By.CSS_SELECTOR, "div.cs-loader")))
+    except TimeoutException:
+        print("Page load timed out but continuing with script execution.")
 
 
 try:
@@ -59,33 +61,39 @@ try:
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     driver.get("https://dubailand.gov.ae/en/open-data/real-estate-data#/")
 
-    safe_click(driver, (By.ID, "rent-tab"))
+    rent_tab_locator = (By.ID, "rent-tab")
+    safe_click(driver, rent_tab_locator)
 
-    from_date = get_element_safe(driver, (By.ID, "rent_pFromDate"))
+    from_date = get_element_safe(driver, (By.ID, "rent_pFromDate"), 3, 10)
     from_date.clear()
-    from_date.send_keys("01/05/2024")
-    from_date.send_keys(Keys.RETURN)
+    from_date.send_keys("01/07/2024")
 
-    to_date = get_element_safe(driver, (By.ID, "rent_pToDate"))
+    to_date = get_element_safe(driver, (By.ID, "rent_pToDate"), 3, 10)
     to_date.clear()
-    to_date.send_keys("31/05/2024")
-    to_date.send_keys(Keys.RETURN)
+    to_date.send_keys("28/07/2024")
+    to_date.send_keys(Keys.RETURN)  # Triggers the filter application
+    to_date.send_keys(Keys.RETURN)  # Triggers the filter application
+    time.sleep(10)
 
     wait_for_load(driver)
 
     select_element = Select(get_element_safe(driver, (By.NAME, "rentGrid_length")))
     select_element.select_by_value('100')
 
-    # Desired start page number
     desired_page = 5
     current_page = 1
     while current_page < desired_page:
-        next_page_link = wait_for_clickable(driver, (By.CSS_SELECTOR, "button.page-link.next"))
-        safe_click(driver, next_page_link)
-        current_page += 1
-        wait_for_load(driver)
+        next_page_button = get_element_safe(driver, (By.CSS_SELECTOR, "button.page-link.next"), 3, 5)
+        if next_page_button and next_page_button.get_attribute("aria-disabled") != "true":
+            safe_click(driver, (By.CSS_SELECTOR, "button.page-link.next"))
+            current_page += 1
+            print(f"Moved to page {current_page}")
+            wait_for_load(driver)
+        else:
+            print("Reached the end of pages or the specified page does not exist.")
+            break
 
-    with open('../continue.csv', 'w', newline='') as file:
+    with open('../rents_month2.csv', 'w', newline='') as file:
         writer = csv.writer(file)
         first_page = True
         while True:
@@ -103,7 +111,7 @@ try:
             next_button = get_element_safe(driver, (By.CSS_SELECTOR, "button.page-link.next"))
             if next_button.get_attribute("aria-disabled") == "true":
                 break
-            safe_click(driver, next_page_link)
+            safe_click(driver, next_button)
 
 except Exception as e:
     print("An error occurred:", str(e))

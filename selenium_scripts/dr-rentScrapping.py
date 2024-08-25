@@ -14,7 +14,7 @@ import csv
 import traceback
 
 
-def get_element_safe(driver, locator, retries=3, delay=1):
+def get_element_safe(driver, locator, retries=3, delay=3):
     for _ in range(retries):
         try:
             return driver.find_element(*locator)
@@ -49,7 +49,6 @@ def wait_for_clickable(driver, locator, timeout=60):
 
 
 def wait_for_load(driver, timeout=60):
-    """Wait for the loader to disappear and page to load completely."""
     try:
         wait = WebDriverWait(driver, timeout)
         wait.until(lambda driver: driver.execute_script("return document.readyState") == "complete")
